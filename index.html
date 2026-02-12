@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0c0c0f">
+    <meta name="description" content="安全便捷的密码管理工具">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <title>密码管家</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="bg-animation"></div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <div class="lock-screen" id="lockScreen">
+        <div class="lock-content">
+            <div class="lock-icon-wrapper">
+                <div class="lock-icon-bg"></div>
+                <div class="lock-icon">
+                    <svg viewBox="0 0 24 24"><path d="M12 17a2 2 0 100-4 2 2 0 000 4zm6-9a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8a2 2 0 012-2h1V6a5 5 0 0110 0v2h1zM8 6a4 4 0 018 0v2H8V6z"/></svg>
+                </div>
+            </div>
+            <div class="lock-title">密码管家</div>
+            <div class="lock-subtitle">请输入主密码解锁</div>
+            <div class="lock-input-wrapper">
+                <input type="password" class="lock-input" id="lockPasswordInput" placeholder="输入主密码" autocomplete="off">
+                <button class="lock-unlock-btn" id="unlockBtn">解锁</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container" id="appContainer" style="display: none;">
+        <div class="header">
+            <div class="header-top">
+                <h1 class="header-title">密码库</h1>
+                <div class="header-actions">
+                    <button class="icon-btn" onclick="openGroupManager()" title="管理分组">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                        </svg>
+                    </button>
+                    <button class="icon-btn" onclick="toggleSelectionMode()" title="批量操作">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="selection-bar" style="display: none;">
+                    <span class="selection-count">已选择 <span id="selectedCount">0</span> 项</span>
+                    <div class="selection-actions">
+                        <button class="selection-btn move" onclick="openBatchMoveModal()">移动</button>
+                        <button class="selection-btn delete" onclick="batchDelete()">删除</button>
+                        <button class="selection-btn cancel" onclick="toggleSelectionMode()">取消</button>
+                    </div>
+                </div>
+            </div>
+            <div class="search-wrapper">
+                <div class="search-box">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: var(--text-secondary);">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input type="text" placeholder="搜索密码..." id="searchInput">
+                </div>
+            </div>
+        </div>
+
+        <div class="group-tabs-wrapper">
+            <div class="group-tabs" id="groupTabs"></div>
+        </div>
+
+        <div class="password-list" id="passwordList"></div>
+
+        <div class="bottom-nav" id="bottomNav">
+            <div class="nav-item active" data-page="home" onclick="showPage('home')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                </svg>
+                <span>首页</span>
+            </div>
+            <div class="add-btn-wrapper">
+                <div class="add-btn" onclick="openAddModal()">
+                    <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="nav-item" data-page="settings" onclick="showPage('settings')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                </svg>
+                <span>设置</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container" id="detailPage" style="display: none;">
+        <div class="header">
+            <div class="header-top">
+                <h1 class="header-title">密码详情</h1>
+                <div class="header-actions">
+                    <button class="icon-btn" onclick="showPage('home')" title="返回">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                    <button class="icon-btn" onclick="editCurrentItem()" title="编辑">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414 2 2 0 112.828 0l-4-4m0 0L8 8m4-4v12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div style="padding: 20px;">
+            <div class="detail-header">
+                <div class="detail-icon" id="detailIcon">🌐</div>
+                <div class="detail-title" id="detailTitle">example.com</div>
+                <div class="detail-subtitle" id="detailCategory">网站</div>
+            </div>
+            
+            <div class="detail-field">
+                <div class="detail-label">用户名</div>
+                <div class="detail-value">
+                    <span id="detailUsername">user123</span>
+                    <button class="copy-btn" onclick="copyToClipboard('detailUsername')">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                        复制
+                    </button>
+                </div>
+            </div>
+
+            <div class="detail-field">
+                <div class="detail-label">密码</div>
+                <div class="detail-value">
+                    <span id="detailPassword" class="password-mask">••••••••••</span>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="copy-btn" onclick="toggleDetailPassword()">
+                            <span id="eyeIcon">👁</span>
+                        </button>
+                        <button class="copy-btn" onclick="copyToClipboard('detailPassword')">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="detailCustomFields"></div>
+
+            <button class="delete-btn" onclick="deleteCurrentItem()">删除此密码</button>
+        </div>
+    </div>
+
+    <div class="modal" id="groupModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">管理分组</h3>
+                <button class="close-btn" onclick="closeModal('groupModal')">✕</button>
+            </div>
+            
+            <div class="groups-list" id="groupsList"></div>
+
+            <div class="add-group-form">
+                <input type="text" class="add-group-input" id="newGroupName" placeholder="新分组名称">
+                <button class="submit-btn" style="width: auto; padding: 12px 24px; margin: 0;" onclick="addNewGroup()">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="batchMoveModal">
+        <div class="modal-content batch-move-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">批量移动</h3>
+                <button class="close-btn" onclick="closeModal('batchMoveModal')">✕</button>
+            </div>
+            <div style="color: var(--text-secondary); font-size: 14px; margin-bottom: 12px;">选择目标分组</div>
+            <div class="batch-move-options" id="batchMoveOptions"></div>
+        </div>
+    </div>
+
+    <div class="app-container" id="addPage" style="display: none;">
+        <div class="header">
+            <div class="header-top">
+                <h1 class="header-title" id="addPageTitle">添加密码</h1>
+                <div class="header-actions">
+                    <button class="icon-btn" onclick="showPage('home')" title="返回">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div style="padding: 20px;">
+            <form id="addPasswordForm">
+                <input type="hidden" id="editId">
+                
+                <div class="icon-selector-wrapper">
+                    <label class="form-label">选择图标</label>
+                    <div class="icon-tabs">
+                        <div class="icon-tab active" onclick="switchIconTab('emoji', this)">表情</div>
+                        <div class="icon-tab" onclick="switchIconTab('upload', this)">上传图片</div>
+                    </div>
+                    
+                    <div id="emojiSelector" class="icon-selector">
+                        <div class="icon-option selected" data-icon="🌐" style="background: linear-gradient(135deg, #667eea, #764ba2);">🌐</div>
+                        <div class="icon-option" data-icon="📧" style="background: linear-gradient(135deg, #f093fb, #f5576c);">📧</div>
+                        <div class="icon-option" data-icon="💬" style="background: linear-gradient(135deg, #4facfe, #00f2fe);">💬</div>
+                        <div class="icon-option" data-icon="🎮" style="background: linear-gradient(135deg, #43e97b, #38f9d7);">🎮</div>
+                        <div class="icon-option" data-icon="🏦" style="background: linear-gradient(135deg, #fa709a, #fee140);">🏦</div>
+                        <div class="icon-option" data-icon="🛒" style="background: linear-gradient(135deg, #30cfd0, #330867);">🛒</div>
+                        <div class="icon-option" data-icon="🎵" style="background: linear-gradient(135deg, #a8edea, #fed6e3);">🎵</div>
+                        <div class="icon-option" data-icon="📱" style="background: linear-gradient(135deg, #ff9a9e, #fecfef);">📱</div>
+                        <div class="icon-option" data-icon="💻" style="background: linear-gradient(135deg, #667eea, #764ba2);">💻</div>
+                        <div class="icon-option" data-icon="🔒" style="background: linear-gradient(135deg, #f093fb, #f5576c);">🔒</div>
+                        <div class="icon-option" data-icon="⭐" style="background: linear-gradient(135deg, #fa709a, #fee140);">⭐</div>
+                        <div class="icon-option" data-icon="🎯" style="background: linear-gradient(135deg, #30cfd0, #330867);">🎯</div>
+                    </div>
+
+                    <div id="uploadSelector" class="icon-selector" style="display: none;">
+                        <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                            <input type="file" id="fileInput" accept="image/*" onchange="handleImageUpload(event)">
+                            <svg width="32" height="32" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.5;">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <span>点击上传图片</span>
+                        </div>
+                    </div>
+                    <input type="hidden" id="iconType" value="emoji">
+                    <input type="hidden" id="iconValue" value="🌐">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">名称 / 网站</label>
+                    <input type="text" class="form-input" id="appName" placeholder="例如: example.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">用户名 / 账号</label>
+                    <input type="text" class="form-input" id="username" placeholder="输入用户名" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" class="form-input" id="password" placeholder="输入密码" required>
+                        <button type="button" class="toggle-password" onclick="togglePasswordVisibility('password')">👁</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">分组</label>
+                    <select class="form-select" id="category" required></select>
+                </div>
+
+                <div class="custom-fields-section">
+                    <div class="section-header">
+                        <label class="form-label" style="margin: 0;">自定义字段</label>
+                        <button type="button" class="add-field-btn" onclick="addCustomField()">
+                            <span>+</span> 添加字段
+                        </button>
+                    </div>
+                    <div id="customFieldsContainer"></div>
+                </div>
+
+                <button type="submit" class="submit-btn">保存</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="app-container" id="settingsPage" style="display: none;">
+        <div class="header">
+            <div class="header-top">
+                <h1 class="header-title">设置</h1>
+            </div>
+        </div>
+        <div class="settings-list">
+            <div class="settings-item" onclick="toggleTheme()">
+                <div class="settings-left">
+                    <div class="settings-icon" style="background: linear-gradient(135deg, #fbbf24, #f59e0b);">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="settings-text">主题切换</div>
+                        <div class="settings-desc">暗色/亮色模式</div>
+                    </div>
+                </div>
+                <span id="themeIcon" style="color: var(--text-secondary);">🌙</span>
+            </div>
+            
+            <div class="settings-item" onclick="toggleAutoLockSetting()">
+                <div class="settings-left">
+                    <div class="settings-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="settings-text">自动锁定</div>
+                        <div class="settings-desc">离开应用后自动锁定</div>
+                    </div>
+                </div>
+                <div class="toggle-switch active" id="autoLockToggle"></div>
+            </div>
+            
+            <div class="settings-item" onclick="exportData()">
+                <div class="settings-left">
+                    <div class="settings-icon" style="background: linear-gradient(135deg, #3b82f6, #8b5cf6);">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="settings-text">导出数据</div>
+                        <div class="settings-desc">备份到本地文件</div>
+                    </div>
+                </div>
+                <span style="color: var(--text-secondary);">›</span>
+            </div>
+            
+            <div class="settings-item" onclick="importData()">
+                <div class="settings-left">
+                    <div class="settings-icon" style="background: linear-gradient(135deg, #f59e0b, #f97316);">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="settings-text">导入数据</div>
+                        <div class="settings-desc">从备份文件恢复</div>
+                    </div>
+                </div>
+                <span style="color: var(--text-secondary);">›</span>
+            </div>
+            
+            <div class="settings-item" onclick="lockApp()">
+                <div class="settings-left">
+                    <div class="settings-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="settings-text">立即锁定</div>
+                        <div class="settings-desc">返回锁屏界面</div>
+                    </div>
+                </div>
+                <span style="color: var(--text-secondary);">›</span>
+            </div>
+        </div>
+        <input type="file" id="importFileInput" accept=".json" style="display: none;" onchange="handleImport(event)">
+
+        <div class="bottom-nav" id="settingsBottomNav">
+            <div class="nav-item" data-page="home" onclick="showPage('home')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                </svg>
+                <span>首页</span>
+            </div>
+            <div class="add-btn-wrapper">
+                <div class="add-btn" onclick="openAddModal()">
+                    <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="nav-item active" data-page="settings" onclick="showPage('settings')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                </svg>
+                <span>设置</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-right: 4px;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        <span id="toastText">已复制到剪贴板</span>
+    </div>
+
+    <script src="crypto.js"></script>
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js');
+            });
+        }
+    </script>
+</body>
+</html>
