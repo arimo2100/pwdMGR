@@ -1,4 +1,4 @@
-let groups = JSON.parse(localStorage.getItem('groups')) || [
+let groups = [
     { id: 'all', name: '全部', system: true },
     { id: 'website', name: '网站', system: false, color: '#667eea' },
     { id: 'app', name: '应用', system: false, color: '#f093fb' },
@@ -7,15 +7,17 @@ let groups = JSON.parse(localStorage.getItem('groups')) || [
 ];
 
 let passwords = [];
-let autoLock = JSON.parse(localStorage.getItem('autoLock')) !== false;
+let autoLock = true;
 let currentFilter = 'all';
 let currentDetailId = null;
 let masterPassword = '';
-let isInitialized = localStorage.getItem('masterPasswordHash') !== null;
+let isInitialized = false;
 let isUnlocked = false;
 let selectionMode = false;
 let selectedItems = new Set();
 let isLoading = false;
+let loginAttempts = 0;
+let lockoutUntil = 0;
 
 function showLoading() {
     isLoading = true;
@@ -46,7 +48,16 @@ function showSkeleton() {
 }
 
 async function checkInitialization() {
-    isInitialized = localStorage.getItem('masterPasswordHash') !== null;
+    const hash = await DB.getSetting('masterPasswordHash');
+    isInitialized = hash !== undefined && hash !== null;
+    
+    const savedGroups = await DB.getSetting('groups');
+    if (savedGroups) {
+        groups = savedGroups;
+    }
+    
+    const savedAutoLock = await DB.getSetting('autoLock');
+    autoLock = savedAutoLock !== false;
 }
 
 function showSetupScreen() {
@@ -90,7 +101,7 @@ async function completeSetup() {
     }
     
     const hash = await CryptoUtils.hashPassword(password);
-    localStorage.setItem('masterPasswordHash', hash);
+    await DB.saveSetting('masterPasswordHash', hash);
     masterPassword = password;
     isInitialized = true;
     isUnlocked = true;
@@ -137,10 +148,18 @@ function initLockScreen() {
     }
 
     async function checkPassword(password) {
-        const storedHash = localStorage.getItem('masterPasswordHash');
+        const now = Date.now();
+        if (lockoutUntil > now) {
+            const remaining = Math.ceil((lockoutUntil - now) / 1000);
+            showToast(`请等待 ${remaining} 秒后再试`);
+            return;
+        }
+        
+        const storedHash = await DB.getSetting('masterPasswordHash');
         const isValid = await CryptoUtils.verifyPassword(password, storedHash);
         
         if (isValid) {
+            loginAttempts = 0;
             masterPassword = password;
             isUnlocked = true;
             await loadPasswords();
@@ -148,7 +167,13 @@ function initLockScreen() {
             renderPasswords();
             unlockApp();
         } else {
-            showToast('密码错误');
+            loginAttempts++;
+            if (loginAttempts >= 5) {
+                lockoutUntil = now + 30000;
+                showToast('错误次数过多，请30秒后再试');
+            } else {
+                showToast(`密码错误 (${loginAttempts}/5)`);
+            }
             document.getElementById('lockPasswordInput').value = '';
             document.querySelector('.lock-content').style.animation = 'shake 0.5s';
             setTimeout(() => {
@@ -159,7 +184,7 @@ function initLockScreen() {
 }
 
 async function loadPasswords() {
-    const encryptedData = localStorage.getItem('encryptedPasswords');
+    const encryptedData = await DB.getSetting('encryptedPasswords');
     if (encryptedData) {
         const decrypted = await CryptoUtils.decrypt(encryptedData, masterPassword);
         if (decrypted) {
@@ -172,7 +197,7 @@ async function loadPasswords() {
 
 async function savePasswords() {
     const encrypted = await CryptoUtils.encrypt(JSON.stringify(passwords), masterPassword);
-    localStorage.setItem('encryptedPasswords', encrypted);
+    await DB.saveSetting('encryptedPasswords', encrypted);
 }
 
 function unlockApp() {
@@ -185,15 +210,19 @@ function unlockApp() {
 }
 
 function lockApp() {
-    masterPassword = '';
-    isUnlocked = false;
-    passwords = [];
+    clearSensitiveData();
     location.reload();
 }
 
-function toggleAutoLockSetting() {
+function clearSensitiveData() {
+    masterPassword = '';
+    isUnlocked = false;
+    passwords = [];
+}
+
+async function toggleAutoLockSetting() {
     autoLock = !autoLock;
-    localStorage.setItem('autoLock', JSON.stringify(autoLock));
+    await DB.saveSetting('autoLock', autoLock);
     const toggle = document.getElementById('autoLockToggle');
     toggle.classList.toggle('active');
     showToast(autoLock ? '自动锁定已开启' : '自动锁定已关闭');
@@ -229,7 +258,7 @@ function toggleTheme() {
     const newTheme = currentTheme === 'light' ? 'dark' : 'light';
     
     html.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
+    DB.saveSetting('theme', newTheme);
     
     const themeIcon = document.getElementById('themeIcon');
     themeIcon.textContent = newTheme === 'light' ? '☀️' : '🌙';
@@ -237,8 +266,8 @@ function toggleTheme() {
     showToast(newTheme === 'light' ? '已切换到亮色模式' : '已切换到暗色模式');
 }
 
-function loadTheme() {
-    const savedTheme = localStorage.getItem('theme') || 'dark';
+async function loadTheme() {
+    const savedTheme = await DB.getSetting('theme') || 'dark';
     document.documentElement.setAttribute('data-theme', savedTheme);
     const themeIcon = document.getElementById('themeIcon');
     if (themeIcon) {
@@ -267,15 +296,17 @@ function handleImport(event) {
     if (!file) return;
     
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         try {
             const data = JSON.parse(e.target.result);
             if (data.passwords && Array.isArray(data.passwords)) {
                 if (confirm(`确定要导入吗？将覆盖现有数据（包含 ${data.passwords.length} 个密码）`)) {
                     passwords = data.passwords;
-                    if (data.groups) groups = data.groups;
-                    localStorage.setItem('groups', JSON.stringify(groups));
-                    savePasswords();
+                    if (data.groups) {
+                        groups = data.groups;
+                        await DB.saveSetting('groups', groups);
+                    }
+                    await savePasswords();
                     renderGroups();
                     renderPasswords();
                     showToast('数据导入成功');
@@ -320,7 +351,7 @@ function selectGroup(groupId) {
 
 function renderPasswords(searchTerm = '') {
     const list = document.getElementById('passwordList');
-    list.innerHTML = '';
+    const fragment = document.createDocumentFragment();
 
     let filtered = passwords;
     
@@ -338,7 +369,7 @@ function renderPasswords(searchTerm = '') {
     if (filtered.length === 0) {
         list.innerHTML = `
             <div class="empty-state">
-                <div class="empty-icon"></div>
+                <div class="empty-icon">🔐</div>
                 <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">暂无密码记录</div>
                 <div style="font-size: 14px; opacity: 0.6;">点击底部 + 号添加</div>
             </div>
@@ -389,6 +420,10 @@ function renderPasswords(searchTerm = '') {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                 </svg>
             ` : ''}
+            <div class="swipe-actions">
+                <div class="swipe-action copy" onclick="event.stopPropagation(); handleSwipeCopy(${item.id})">复制</div>
+                <div class="swipe-action delete" onclick="event.stopPropagation(); handleSwipeDelete(${item.id})">删除</div>
+            </div>
         `;
         
         if (selectionMode) {
@@ -397,13 +432,76 @@ function renderPasswords(searchTerm = '') {
             div.onclick = () => showPage('detail', item);
         }
         
+        setupSwipeActions(div);
         setupDragEvents(div);
-        list.appendChild(div);
+        fragment.appendChild(div);
+    });
+    
+    list.innerHTML = '';
+    list.appendChild(fragment);
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+function setupSwipeActions(element) {
+    let startX = 0;
+    let currentX = 0;
+    let swiping = false;
+    
+    element.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        swiping = true;
+    });
+    
+    element.addEventListener('touchmove', (e) => {
+        if (!swiping) return;
+        currentX = e.touches[0].clientX;
+        const diff = startX - currentX;
+        
+        if (diff > 50) {
+            element.classList.add('swiped');
+        } else if (diff < -20) {
+            element.classList.remove('swiped');
+        }
+    });
+    
+    element.addEventListener('touchend', () => {
+        swiping = false;
     });
 }
 
+function handleSwipeCopy(id) {
+    const item = passwords.find(p => p.id === id);
+    if (item) {
+        copyText(item.password);
+    }
+}
+
+async function handleSwipeDelete(id) {
+    if (confirm('确定删除此密码？')) {
+        passwords = passwords.filter(p => p.id !== id);
+        await savePasswords();
+        renderPasswords();
+        showToast('已删除');
+    }
+}
+
+const debouncedSearch = debounce((value) => {
+    renderPasswords(value);
+}, 300);
+
 document.getElementById('searchInput')?.addEventListener('input', (e) => {
-    renderPasswords(e.target.value);
+    debouncedSearch(e.target.value);
 });
 
 function openGroupManager() {
@@ -508,7 +606,7 @@ async function deleteGroup(id) {
 }
 
 function saveGroups() {
-    localStorage.setItem('groups', JSON.stringify(groups));
+    DB.saveSetting('groups', groups);
 }
 
 function showPage(page, item = null) {
@@ -1093,7 +1191,8 @@ style.textContent = `
 document.head.appendChild(style);
 
 document.addEventListener('DOMContentLoaded', async () => {
-    loadTheme();
+    await DB.init();
+    await loadTheme();
     await checkInitialization();
     
     if (isInitialized) {
@@ -1101,6 +1200,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         initLockScreen();
         renderGroups();
         renderPasswords();
+        setupPullToRefresh();
     } else {
         showSetupScreen();
     }
@@ -1108,3 +1208,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     hideLoading();
     setupAutoLock();
 });
+
+function setupPullToRefresh() {
+    const list = document.getElementById('passwordList');
+    if (!list) return;
+    
+    let startY = 0;
+    let pulling = false;
+    
+    const indicator = document.createElement('div');
+    indicator.className = 'pull-indicator';
+    indicator.innerHTML = '🔄';
+    list.insertBefore(indicator, list.firstChild);
+    
+    list.addEventListener('touchstart', (e) => {
+        if (list.scrollTop === 0) {
+            startY = e.touches[0].clientY;
+            pulling = true;
+        }
+    });
+    
+    list.addEventListener('touchmove', (e) => {
+        if (!pulling) return;
+        const currentY = e.touches[0].clientY;
+        const diff = currentY - startY;
+        
+        if (diff > 60) {
+            indicator.classList.add('visible');
+        }
+    });
+    
+    list.addEventListener('touchend', async () => {
+        if (indicator.classList.contains('visible')) {
+            indicator.classList.add('loading');
+            await loadPasswords();
+            renderPasswords();
+            indicator.classList.remove('visible', 'loading');
+            showToast('已刷新');
+        }
+        pulling = false;
+    });
+}
