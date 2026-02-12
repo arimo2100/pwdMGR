@@ -1105,5 +1105,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         showSetupScreen();
     }
     
+    hideLoading();
     setupAutoLock();
 });
